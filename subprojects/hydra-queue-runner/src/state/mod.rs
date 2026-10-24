@@ -972,6 +972,11 @@ impl State {
             };
             if &resolved_path != drv {
                 tracing::info!("resolved CA derivation {drv} -> {resolved_path}");
+                // Nothing else roots the resolved drv; keep it until it is
+                // uploaded. hydra-update-gc-roots drops the root later.
+                if let Err(e) = self.add_root(&resolved_path).await {
+                    tracing::warn!("failed to create GC root for {resolved_path}: {e}");
+                }
 
                 // Record the original step directly as Resolved, with
                 // `resolvedDrvPath` set so future output lookups can
@@ -1962,6 +1967,9 @@ impl State {
             }
         }
 
+        // Lets binary cache clients resolve the outputs' `Deriver`.
+        let drv_to_upload = self.config.upload_derivations().then(|| drv_path.clone());
+
         // Copy outputs to non-S3 stores via `nix copy`.
         {
             let nix_copy_uris: Vec<String> = {
@@ -1978,6 +1986,7 @@ impl State {
                 let paths: Vec<String> = output
                     .outputs
                     .values()
+                    .chain(&drv_to_upload)
                     .map(|p| self.connector.store_dir().display(p).to_string())
                     .collect();
                 for dest_uri in &nix_copy_uris {
@@ -2010,11 +2019,13 @@ impl State {
             }
         }
 
-        let outputs_to_upload = if self.config.use_presigned_uploads() {
+        let mut outputs_to_upload: Vec<StorePath> = if self.config.use_presigned_uploads() {
             Vec::new()
         } else {
             output.outputs.values().cloned().collect()
         };
+        // The .drv lives in the queue runner's store even with presigned uploads.
+        outputs_to_upload.extend(drv_to_upload);
         self.schedule_step_upload(&job, &item.step_info.step, outputs_to_upload)
             .await;
 

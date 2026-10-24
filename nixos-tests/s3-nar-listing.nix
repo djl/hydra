@@ -180,6 +180,7 @@ in
       services.hydra-queue-runner-dev = {
         settings.remoteStoreAddr = [ "${s3StoreUri}&secret-key=${cacheKey}" ];
         settings.usePresignedUploads = presigned;
+        settings.uploadDerivations = true;
         settings.forcedSubstituters = lib.optionals presigned [ s3StoreUri ];
         awsCredentialsFile = "/var/lib/hydra/queue-runner/.aws-credentials";
       };
@@ -383,6 +384,11 @@ in
     drv_name = build_info["drvpath"].split("/")[-1]
     build_log = server.wait_until_succeeds(s3_curl(f"log/{drv_name}"), timeout=60)
     assert "trivial-build-log" in build_log, f"unexpected build log: {build_log!r}"
+
+    # uploadDerivations: the output's Deriver must be fetchable from the cache.
+    assert narinfo_field("Deriver") == drv_name, f"unexpected Deriver in narinfo:\n{narinfo}"
+    drv_narinfo = server.wait_until_succeeds(s3_curl(f"{drv_name[:32]}.narinfo"), timeout=60)
+    assert f"StorePath: {build_info['drvpath']}" in drv_narinfo, drv_narinfo
 
     ${lib.optionalString presigned ''
       # Regression: a closure path already in the cache must not be re-uploaded

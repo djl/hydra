@@ -376,7 +376,27 @@ impl Uploader {
         let closure = if msg.store_paths.is_empty() {
             Vec::new()
         } else {
-            match store.query_closure_infos(msg.store_paths.to_vec()).await {
+            // A path every remote store has implies its closure is there too,
+            // so don't descend into it (drv closures are mostly cached).
+            let closure = async {
+                daemon_client_utils::query_closure_infos_pruned(
+                    &mut store.connect().await?,
+                    msg.store_paths.to_vec(),
+                    |p| {
+                        let remote_stores = &remote_stores;
+                        async move {
+                            for s in remote_stores {
+                                if !s.has_narinfo(&p).await.unwrap_or(false) {
+                                    return false;
+                                }
+                            }
+                            true
+                        }
+                    },
+                )
+                .await
+            };
+            match closure.await {
                 Ok(c) => c,
                 Err(e) => {
                     tracing::error!("Failed to query requisites: {e}");

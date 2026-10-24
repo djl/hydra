@@ -151,6 +151,15 @@ in
               type = lib.types.bool;
               default = false;
             };
+            uploadDerivations = lib.mkOption {
+              description = ''
+                If enabled the queue runner also uploads the derivation (`.drv`) of each built step,
+                along with its closure (input derivations and sources), to the remote stores.
+                This makes the `Deriver` of uploaded outputs resolvable from the binary cache.
+              '';
+              type = lib.types.bool;
+              default = false;
+            };
             overflowStore = lib.mkOption {
               description = "Overflow S3 store. Steps referenced only by the listed jobsets are uploaded there instead of the default store.";
               default = null;

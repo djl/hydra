@@ -195,6 +195,7 @@ impl OverflowStore {
 #[derive(Debug, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_excessive_bools)]
 struct AppConfig {
     #[serde(default = "default_data_dir")]
     hydra_data_dir: std::path::PathBuf,
@@ -259,6 +260,10 @@ struct AppConfig {
     #[serde(default)]
     use_presigned_uploads: bool,
 
+    // Also upload each built step's .drv (and its closure) to the remote stores.
+    #[serde(default)]
+    upload_derivations: bool,
+
     // Per-output NAR size limit in bytes; builds whose output exceeds it fail
     // with NarSizeLimitExceeded. 0 (default) disables the check.
     #[serde(default)]
@@ -287,6 +292,7 @@ struct AppConfig {
 
 /// Prepared configuration of the application
 #[derive(Debug)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct PreparedApp {
     #[allow(dead_code)]
     hydra_data_dir: std::path::PathBuf,
@@ -312,6 +318,7 @@ pub struct PreparedApp {
     token_list: Option<Vec<String>>,
     pub enable_fod_checker: bool,
     pub use_presigned_uploads: bool,
+    pub upload_derivations: bool,
     pub max_output_size: u64,
     pub max_silent_time: i32,
     pub build_timeout: i32,
@@ -418,6 +425,7 @@ impl TryFrom<AppConfig> for PreparedApp {
             token_list,
             enable_fod_checker: val.enable_fod_checker,
             use_presigned_uploads: val.use_presigned_uploads,
+            upload_derivations: val.upload_derivations,
             max_output_size: val.max_output_size,
             max_silent_time: val.max_silent_time,
             build_timeout: val.build_timeout,
@@ -519,6 +527,12 @@ impl App {
     pub fn use_presigned_uploads(&self) -> bool {
         let inner = self.inner.load();
         inner.use_presigned_uploads
+    }
+
+    #[must_use]
+    pub fn upload_derivations(&self) -> bool {
+        let inner = self.inner.load();
+        inner.upload_derivations
     }
 
     #[must_use]
